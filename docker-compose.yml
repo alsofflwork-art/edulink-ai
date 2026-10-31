@@ -1,0 +1,9 @@
+services:
+  edulink-ai:
+    build: .
+    image: edulink-ai:latest
+    container_name: edulink-ai
+    ports:
+      # Host port defaults to 3000; override with EDULINK_PORT=xxxx
+      - "${EDULINK_PORT:-3000}:80"
+    restart: unless-stopped
