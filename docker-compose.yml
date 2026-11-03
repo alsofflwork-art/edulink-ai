@@ -6,4 +6,10 @@ services:
     ports:
       # Host port defaults to 3000; override with EDULINK_PORT=xxxx
       - "${EDULINK_PORT:-3000}:80"
+    # Optional live AI. Values come from .env (see .env.example); when unset,
+    # the app runs fully on its simulated data layer.
+    environment:
+      KIMI_BASE_URL: ${KIMI_BASE_URL:-http://127.0.0.1:9/v1}
+      KIMI_API_KEY: ${KIMI_API_KEY:-}
+      KIMI_MODEL_NAME: ${KIMI_MODEL_NAME:-}
     restart: unless-stopped

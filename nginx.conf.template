@@ -1,0 +1,42 @@
+# Rendered by the nginx image at startup: ${VAR} placeholders are replaced with
+# the container's environment (see docker-compose.yml). Nginx's own $variables
+# are left alone because they are not set in the environment.
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript image/svg+xml application/json;
+
+    # Which live model is configured (empty = live AI hidden in the UI).
+    location = /api/llm/config {
+        default_type application/json;
+        add_header Cache-Control "no-store";
+        return 200 '{"kimi":{"model":"${KIMI_MODEL_NAME}"}}';
+    }
+
+    # Proxy to the configured Kimi endpoint. The key is added here, so it
+    # never reaches the browser.
+    location /api/llm/kimi/ {
+        proxy_pass ${KIMI_BASE_URL}/;
+        proxy_set_header Authorization "Bearer ${KIMI_API_KEY}";
+        proxy_set_header Content-Type "application/json";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 180s;
+        proxy_read_timeout 180s;
+        client_max_body_size 1m;
+    }
+
+    # Hashed build assets can be cached aggressively.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Single-page app: fall back to index.html.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

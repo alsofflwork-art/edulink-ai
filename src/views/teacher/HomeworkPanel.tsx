@@ -1,12 +1,13 @@
-import { useState } from 'react';
-import { CheckCircle2, Eye, EyeOff, Quote, RefreshCw, Send, Sparkles, Wand2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BrainCircuit, CheckCircle2, Eye, EyeOff, Loader2, Quote, RefreshCw, Send, Sparkles, Wand2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { homeworkSets, photosynthesisTranscript } from '@/data/mockData';
+import { homeworkSets, photosynthesisTranscript, syllabusChapter } from '@/data/mockData';
 import { useAppStore } from '@/store/useAppStore';
 import { cn, shuffle } from '@/lib/utils';
+import { displayModelName, generateHomeworkLive, loadLiveAiConfig, type LiveAiConfig } from '@/lib/liveAi';
 import type { Audience, QuizItem } from '@/types';
 
 const audiences: { id: Audience; label: string }[] = [
@@ -33,9 +34,50 @@ export function HomeworkPanel() {
   const publishedAt = useAppStore((s) => s.publishedAt);
   const publish = useAppStore((s) => s.publishHomework);
   const pushToast = useAppStore((s) => s.pushToast);
+  const [liveConfig, setLiveConfig] = useState<LiveAiConfig>({ enabled: false, model: '' });
+  const [liveRunning, setLiveRunning] = useState(false);
+  const [liveElapsed, setLiveElapsed] = useState(0);
+  const [liveResult, setLiveResult] = useState<{ model: string; latencyMs: number } | null>(null);
+
+  useEffect(() => {
+    loadLiveAiConfig().then(setLiveConfig);
+  }, []);
+
+  useEffect(() => {
+    if (!liveRunning) return;
+    setLiveElapsed(0);
+    const id = setInterval(() => setLiveElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [liveRunning]);
+
+  const busy = generating || liveRunning;
+
+  const generateLive = async () => {
+    setLiveRunning(true);
+    try {
+      const result = await generateHomeworkLive(audience, liveConfig.model, photosynthesisTranscript, syllabusChapter.objectives);
+      setItems(result.items);
+      setVersion((v) => v + 1);
+      setLiveResult({ model: result.model, latencyMs: result.latencyMs });
+      pushToast({
+        title: `Drafted live by ${displayModelName(result.model)}`,
+        description: `${result.items.length} questions from the lesson transcript in ${(result.latencyMs / 1000).toFixed(1)}s`,
+        tone: 'success',
+      });
+    } catch (err) {
+      pushToast({
+        title: 'Live AI unavailable',
+        description: `${err instanceof Error ? err.message : 'Request failed'}. Keeping the current draft.`,
+        tone: 'warning',
+      });
+    } finally {
+      setLiveRunning(false);
+    }
+  };
 
   const regenerate = (next: Audience, bumpVersion: boolean) => {
     setGenerating(true);
+    setLiveResult(null);
     setTimeout(() => {
       const set = homeworkSets[next].items;
       setItems(bumpVersion ? shuffle(set).map((q) => (q.options ? { ...q, options: shuffle(q.options) } : q)) : set);
@@ -66,7 +108,13 @@ export function HomeworkPanel() {
               <Wand2 className="h-4 w-4" />
             </span>
             <CardTitle>Auto-Generated Homework</CardTitle>
-            <Badge variant="violet">v{version} · AI draft</Badge>
+            {liveResult ? (
+              <Badge variant="success" title={liveResult.model}>
+                <BrainCircuit /> v{version} · Live · {displayModelName(liveResult.model)}
+              </Badge>
+            ) : (
+              <Badge variant="violet">v{version} · AI draft</Badge>
+            )}
           </div>
           <CardDescription className="mt-2">
             Drafted purely from the 08:15 “Photosynthesis” audio — every question links back to the moment it was taught.
@@ -91,9 +139,15 @@ export function HomeworkPanel() {
             {showAnswers ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             {showAnswers ? 'Hide' : 'Show'} key
           </Button>
-          <Button size="sm" variant="outline" onClick={() => regenerate(audience, true)} disabled={generating}>
+          <Button size="sm" variant="outline" onClick={() => regenerate(audience, true)} disabled={busy}>
             <RefreshCw className={cn('h-3.5 w-3.5', generating && 'animate-spin')} /> Regenerate
           </Button>
+          {liveConfig.enabled && (
+            <Button size="sm" onClick={generateLive} disabled={busy} title={`Calls ${liveConfig.model} on Presight's on-prem endpoint`}>
+              {liveRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BrainCircuit className="h-3.5 w-3.5" />}
+              {liveRunning ? `Drafting… ${liveElapsed}s` : `Generate live with ${displayModelName(liveConfig.model)}`}
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -104,11 +158,20 @@ export function HomeworkPanel() {
           <Badge variant="success">
             <CheckCircle2 /> Aligned to SCI-5.3
           </Badge>
-          <Badge variant="outline">Generated in 4.2s</Badge>
+          <Badge variant="outline">
+            {liveResult ? `Generated live in ${(liveResult.latencyMs / 1000).toFixed(1)}s` : 'Generated in 4.2s'}
+          </Badge>
         </div>
 
+        {liveRunning && (
+          <p className="mb-3 flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {displayModelName(liveConfig.model)} is reading the transcript and drafting questions. Reasoning models can take a minute or two.
+          </p>
+        )}
+
         <div className="grid gap-3 md:grid-cols-2">
-          {generating
+          {busy
             ? Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="space-y-3 rounded-xl border border-slate-200 p-4">
                   <div className="flex gap-2">
@@ -136,7 +199,7 @@ export function HomeworkPanel() {
               <CheckCircle2 className="!h-4 !w-4" /> Published at {publishedAt}
             </Badge>
           ) : (
-            <Button variant="success" onClick={handlePublish} disabled={generating}>
+            <Button variant="success" onClick={handlePublish} disabled={busy}>
               <Send className="h-4 w-4" /> Approve & publish to students
             </Button>
           )}

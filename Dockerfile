@@ -10,7 +10,14 @@ RUN npm run build
 
 # ---- Runtime stage: serve static files with nginx ----
 FROM nginx:1.27-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Live AI is off unless these are set at run time (docker-compose.yml reads them from .env).
+# The placeholder URL keeps nginx valid when no endpoint is configured.
+ENV KIMI_BASE_URL=http://127.0.0.1:9/v1 \
+    KIMI_API_KEY= \
+    KIMI_MODEL_NAME=
+
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80

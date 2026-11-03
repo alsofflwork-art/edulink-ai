@@ -40,6 +40,21 @@ npm run build      # type-check + production build
 
 > Fonts load from Google Fonts, so the demo machine needs internet access for the intended typography (it falls back to system fonts offline).
 
+## Live AI (optional)
+
+By default everything runs on the simulated data layer, so the demo works anywhere. To let the Teacher's Hub draft homework with a real model, point it at any OpenAI-compatible `/v1/chat/completions` endpoint (such as an on-prem Kimi deployment):
+
+```bash
+cp .env.example .env    # then fill in KIMI_BASE_URL, KIMI_API_KEY, KIMI_MODEL_NAME
+docker compose up -d --build    # or: npm run dev
+```
+
+A **Generate live with Kimi** button then appears in the homework panel. It sends the lesson transcript and syllabus objectives to the model and shows the questions it returns, each linked to its source timestamp and objective. If the model can't be reached, the current draft stays and a notice explains why.
+
+- The browser only calls `/api/llm/kimi/*` on this app. Nginx (Docker) or the Vite dev server forwards it and adds the key, so the key never reaches the browser.
+- `.env` is ignored by git and Docker. Never commit real hosts or keys.
+- On-prem endpoints are usually only reachable from the internal network or VPN.
+
 ## Structure
 
 ```

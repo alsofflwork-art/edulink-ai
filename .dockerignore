@@ -4,6 +4,8 @@ dist
 .gitignore
 .claude
 *.log
+.env
+.env.*
 Dockerfile
 docker-compose.yml
 .dockerignore
