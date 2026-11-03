@@ -25,6 +25,8 @@ export default defineConfig(({ mode }) => {
   const kimiModel = kimiBase ? env.KIMI_MODEL_NAME?.trim() ?? '' : '';
 
   return {
+    // Relative asset paths so the build also works when hosted under a sub-path.
+    base: './',
     plugins: [react(), liveAiConfig(kimiModel)],
     resolve: {
       alias: { '@': fromRoot('./src') },
